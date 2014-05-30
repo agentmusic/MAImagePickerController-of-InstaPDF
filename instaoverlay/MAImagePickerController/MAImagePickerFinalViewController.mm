@@ -11,6 +11,9 @@
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 #import "MAOpenCV.h"
+#import "RecognitionViewController.h"
+
+
 
 @interface MAImagePickerFinalViewController ()
 
@@ -42,9 +45,21 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+	
+	{
+		CRecognitionViewController* mainRecognitionController = [CRecognitionViewController sharedManager];
+
+		[[self navigationController] pushViewController:mainRecognitionController animated:YES];
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+			[mainRecognitionController recognizeImage:_sourceImage];
+		});
+	}
+	
+	
+	[[self navigationController] setNavigationBarHidden:NO animated:NO];
     
-    [self setupToolbar];
-    [self setupEditor];
+   // [self setupToolbar];
+   // [self setupEditor];
     
     [self.view setBackgroundColor:[UIColor blackColor]];
     
@@ -70,6 +85,9 @@
     [_progressIndicator setHidesWhenStopped:YES];
     [_progressIndicator stopAnimating];
     [self.view addSubview:_progressIndicator];
+	
+	
+	
 }
 
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView

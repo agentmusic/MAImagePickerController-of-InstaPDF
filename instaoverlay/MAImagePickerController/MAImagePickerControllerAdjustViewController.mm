@@ -12,6 +12,7 @@
 #import "MAOpenCV.h"
 #import "UIImageView+ContentFrame.h"
 #import <QuartzCore/QuartzCore.h>
+#import "RecognitionViewController.h"
 
 @interface MAImagePickerControllerAdjustViewController ()
 
@@ -110,7 +111,7 @@
     CGSize targetSize = _sourceImageView.contentSize;
     cv::resize(original, original, cvSize(targetSize.width, targetSize.height));
     
-    cv::vector<cv::vector<cv::Point>>squares;
+    cv::vector<cv::vector<cv::Point> >squares;
     cv::vector<cv::Point> largest_square;
     
     find_squares(original, squares);
@@ -255,17 +256,21 @@
     {
         edited = NO;
     }
-    
-    MAImagePickerFinalViewController *finalView = [[MAImagePickerFinalViewController alloc] init];
-    finalView.sourceImage = _adjustedImage;
-    finalView.imageFrameEdited = edited;
-    
-    CATransition* transition = [CATransition animation];
-    transition.duration = 0.4;
-    transition.type = kCATransitionFade;
-    transition.subtype = kCATransitionFromBottom;
-    [self.navigationController.view.layer addAnimation:transition forKey:kCATransition];
-    [self.navigationController pushViewController:finalView animated:NO];
+	
+	
+    int const maxImagePixelsAmount = 3200000; // 3.2 MP
+	UIImage* newImage =scaleAndRotateImage(_adjustedImage, maxImagePixelsAmount);
+
+	
+	CRecognitionViewController* recognitionController = [CRecognitionViewController sharedManager];
+	[[self navigationController] pushViewController:recognitionController animated:YES];
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+		[recognitionController recognizeImage:newImage];
+	});
+	
+	
+	[[self navigationController] setNavigationBarHidden:NO animated:NO];
+	
 }
 
 - (void)didReceiveMemoryWarning
@@ -290,7 +295,7 @@
 }
 
 // http://stackoverflow.com/questions/8667818/opencv-c-obj-c-detecting-a-sheet-of-paper-square-detection
-void find_squares(cv::Mat& image, cv::vector<cv::vector<cv::Point>>&squares) {
+void find_squares(cv::Mat& image, cv::vector<cv::vector<cv::Point> >&squares) {
     
     // blur will enhance edge detection
     cv::Mat blurred(image);
@@ -422,5 +427,105 @@ cv::Mat debugSquares( std::vector<std::vector<cv::Point> > squares, cv::Mat imag
     
     return image;
 }
+
+
+UIImage *scaleAndRotateImage(UIImage *image, int maxPixelsAmount)
+{
+	CGImageRef imgRef = image.CGImage;
+	
+	CGFloat width = CGImageGetWidth(imgRef);
+	CGFloat height = CGImageGetHeight(imgRef);
+	
+	// Reduce image width and height by 2^n times to match condition: width*height <= maxPixelAmount,
+	// where n = floor( log4( maxPixelsAmount / (width * height) ) )
+	CGFloat scaleRatio = fmin( 1., pow( 2., floor( 1e-12 + log2( (double)maxPixelsAmount / (width * height) ) / 2. ) ) );
+	
+	CGAffineTransform transform = CGAffineTransformIdentity;
+	CGRect bounds = CGRectMake(0, 0, width, height);
+	bounds.size.width = width * scaleRatio;
+	bounds.size.height = height * scaleRatio;
+	
+	CGSize imageSize = CGSizeMake(CGImageGetWidth(imgRef), CGImageGetHeight(imgRef));
+	CGFloat boundHeight;
+	UIImageOrientation orient = image.imageOrientation;
+	switch(orient) {
+		case UIImageOrientationUp:
+			transform = CGAffineTransformIdentity;
+			break;
+			
+		case UIImageOrientationUpMirrored:
+			transform = CGAffineTransformMakeTranslation(imageSize.width, 0.0);
+			transform = CGAffineTransformScale(transform, -1.0, 1.0);
+			break;
+			
+		case UIImageOrientationDown:
+			transform = CGAffineTransformMakeTranslation(imageSize.width, imageSize.height);
+			transform = CGAffineTransformRotate(transform, M_PI);
+			break;
+			
+		case UIImageOrientationDownMirrored:
+			transform = CGAffineTransformMakeTranslation(0.0, imageSize.height);
+			transform = CGAffineTransformScale(transform, 1.0, -1.0);
+			break;
+			
+		case UIImageOrientationLeftMirrored:
+			boundHeight = bounds.size.height;
+			bounds.size.height = bounds.size.width;
+			bounds.size.width = boundHeight;
+			transform = CGAffineTransformMakeTranslation(imageSize.height, imageSize.width);
+			transform = CGAffineTransformScale(transform, -1.0, 1.0);
+			transform = CGAffineTransformRotate(transform, 3.0 * M_PI / 2.0);
+			break;
+			
+		case UIImageOrientationLeft:
+			boundHeight = bounds.size.height;
+			bounds.size.height = bounds.size.width;
+			bounds.size.width = boundHeight;
+			transform = CGAffineTransformMakeTranslation(0.0, imageSize.width);
+			transform = CGAffineTransformRotate(transform, 3.0 * M_PI / 2.0);
+			break;
+			
+		case UIImageOrientationRightMirrored:
+			boundHeight = bounds.size.height;
+			bounds.size.height = bounds.size.width;
+			bounds.size.width = boundHeight;
+			transform = CGAffineTransformMakeScale(-1.0, 1.0);
+			transform = CGAffineTransformRotate(transform, M_PI / 2.0);
+			break;
+			
+		case UIImageOrientationRight:
+			boundHeight = bounds.size.height;
+			bounds.size.height = bounds.size.width;
+			bounds.size.width = boundHeight;
+			transform = CGAffineTransformMakeTranslation(imageSize.height, 0.0);
+			transform = CGAffineTransformRotate(transform, M_PI / 2.0);
+			break;
+			
+		default:
+			[NSException raise:NSInternalInconsistencyException format:@"Invalid image orientation"];
+	}
+	
+	UIGraphicsBeginImageContext(bounds.size);
+	
+	CGContextRef context = UIGraphicsGetCurrentContext();
+	
+	if (orient == UIImageOrientationRight || orient == UIImageOrientationLeft) {
+		CGContextScaleCTM(context, -scaleRatio, scaleRatio);
+		CGContextTranslateCTM(context, -height, 0);
+	}
+	else {
+		CGContextScaleCTM(context, scaleRatio, -scaleRatio);
+		CGContextTranslateCTM(context, 0, -height);
+	}
+	
+	CGContextConcatCTM(context, transform);
+	
+	CGContextDrawImage(UIGraphicsGetCurrentContext(), CGRectMake(0, 0, width, height), imgRef);
+	UIImage *imageCopy = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	
+	return imageCopy;
+}
+
 
 @end
