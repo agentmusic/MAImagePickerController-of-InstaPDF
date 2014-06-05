@@ -46,7 +46,7 @@
     
     _sourceImageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, self.view.bounds.size.height - kCameraToolBarHeight)];
     [_sourceImageView setContentMode:UIViewContentModeScaleAspectFit];
-    
+	
 	
 	NSLog(@"size %f %f",_sourceImage.size.width,_sourceImage.size.height);
 	
