@@ -47,6 +47,9 @@
     _sourceImageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, self.view.bounds.size.height - kCameraToolBarHeight)];
     [_sourceImageView setContentMode:UIViewContentModeScaleAspectFit];
     
+	
+	NSLog(@"size %f %f",_sourceImage.size.width,_sourceImage.size.height);
+	
     _adjustedImage = _sourceImage;
     
     [_sourceImageView setImage:_adjustedImage];
@@ -56,7 +59,7 @@
     [self.view addSubview:_adjustRect];
     
     _adjustToolBar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - kCameraToolBarHeight, self.view.bounds.size.width, kCameraToolBarHeight)];
-    [_adjustToolBar setBackgroundImage:[UIImage imageNamed:@"camera-bottom-bar"] forToolbarPosition:UIToolbarPositionAny barMetrics:UIBarMetricsDefault];
+   // [_adjustToolBar setBackgroundImage:[UIImage imageNamed:@"camera-bottom-bar"] forToolbarPosition:UIToolbarPositionAny barMetrics:UIBarMetricsDefault];
     
     UIBarButtonItem *cancelButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"close-button"] style:UIBarButtonItemStylePlain target:self action:@selector(popCurrentViewController)];
     cancelButton.accessibilityLabel = @"Return to Camera Viewer";
@@ -258,20 +261,48 @@
     }
 	
 	
-    int const maxImagePixelsAmount = 3200000; // 3.2 MP
+    int const maxImagePixelsAmount = 6200000; // 3.2 MP
+	// UIImage* newImage =scaleAndRotateImage(_adjustedImage, maxImagePixelsAmount);
+
 	UIImage* newImage =scaleAndRotateImage(_adjustedImage, maxImagePixelsAmount);
 
+	UIImage* splitImage = [self split:newImage];
 	
+	
+	NSLog(@"size 1 %f %f",_adjustedImage.size.width,splitImage.size.height);
+	NSLog(@"size 2 %f %f",newImage.size.width,newImage.size.height);
+
 	CRecognitionViewController* recognitionController = [CRecognitionViewController sharedManager];
 	[[self navigationController] pushViewController:recognitionController animated:YES];
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
 		[recognitionController recognizeImage:newImage];
 	});
 	
-	
 	[[self navigationController] setNavigationBarHidden:NO animated:NO];
+
+
 	
 }
+
+
+
+-(UIImage *)split:(UIImage *)im {
+	CGSize size = [im size];
+	
+	int i = 1;
+	int div = 2;
+	CGRect portion = CGRectMake(i * size.width/div,0, size.width/div, size.height);
+	UIGraphicsBeginImageContext(portion.size);
+	CGContextRef context = UIGraphicsGetCurrentContext();
+	CGContextScaleCTM(context, 1.0, -1.0);
+	CGContextTranslateCTM(context, 0, -portion.size.height);
+	CGContextTranslateCTM(context, -portion.origin.x, -portion.origin.y);
+	CGContextDrawImage(context,CGRectMake(0.0, 0.0,size.width,  size.height), im.CGImage);
+	UIImage* imageOut =UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return imageOut;
+}
+
 
 - (void)didReceiveMemoryWarning
 {

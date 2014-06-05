@@ -29,12 +29,20 @@
 
 @synthesize invokeCamera = _invokeCamera;
 
+
+-(void)viewWillAppear:(BOOL)animated
+{
+	[super viewWillAppear:animated];
+	[self.navigationController setNavigationBarHidden:YES];
+
+}
+
 - (void)viewDidLoad
 {
     [self.navigationController setNavigationBarHidden:YES];
     [self.view setBackgroundColor:[UIColor blackColor]];
     
-    
+
     
     if (_sourceType == MAImagePickerControllerSourceTypeCamera && [UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera])
     {
@@ -64,7 +72,7 @@
         [_captureManager addStillImageOutput];
         [_captureManager addVideoPreviewLayer];
         
-        CGRect layerRect = CGRectMake(0, 0, self.view.bounds.size.width, self.view.bounds.size.height - kCameraToolBarHeight);
+        CGRect layerRect = CGRectMake(0, 0, self.view.bounds.size.width, self.view.bounds.size.height);
         [[_captureManager previewLayer] setBounds:layerRect];
         [[_captureManager previewLayer] setPosition:CGPointMake(CGRectGetMidX(layerRect),CGRectGetMidY(layerRect))];
         [[[self view] layer] addSublayer:[[self captureManager] previewLayer]];
@@ -81,7 +89,7 @@
         }
         
         UIImageView *gridCameraView = [[UIImageView alloc] initWithImage:gridImage];
-        [gridCameraView setFrame:CGRectMake(0, 0, self.view.bounds.size.width, self.view.bounds.size.height - kCameraToolBarHeight)];
+        [gridCameraView setFrame:CGRectMake(0, 0, self.view.bounds.size.width, self.view.bounds.size.height )];
         
         UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(dismissMAImagePickerController)];
         [swipeDown setDirection:UISwipeGestureRecognizerDirectionDown];
@@ -90,7 +98,7 @@
         [[self view] addSubview:gridCameraView];
         
         _cameraToolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - kCameraToolBarHeight, self.view.bounds.size.width, kCameraToolBarHeight)];
-        [_cameraToolbar setBackgroundImage:[UIImage imageNamed:@"camera-bottom-bar"] forToolbarPosition:UIToolbarPositionAny barMetrics:UIBarMetricsDefault];
+        //[_cameraToolbar setBackgroundImage:[UIImage imageNamed:@"camera-bottom-bar"] forToolbarPosition:UIToolbarPositionAny barMetrics:UIBarMetricsDefault];
         
         UIBarButtonItem *cancelButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"close-button"] style:UIBarButtonItemStylePlain target:self action:@selector(dismissMAImagePickerController)];
         cancelButton.accessibilityLabel = @"Close Camera Viewer";
@@ -152,6 +160,14 @@
         _invokeCamera.allowsEditing = NO;
         [self.view addSubview:_invokeCamera.view];
     }
+	
+	flashIsOn = NO;
+	[_captureManager setFlashOn:NO];
+	[_flashButton setImage:[UIImage imageNamed:@"flash-off-button"]];
+	_flashButton.accessibilityLabel = @"Enable Camera Flash";
+	[self storeFlashSettingWithBool:NO];
+	_flashButton.enabled = false;
+
     
 }
 
