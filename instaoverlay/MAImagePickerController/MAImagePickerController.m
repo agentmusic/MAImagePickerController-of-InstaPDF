@@ -10,9 +10,16 @@
 #import "MAImagePickerControllerAdjustViewController.h"
 
 #import "UIImage+fixOrientation.h"
+#import "UIColor+ZO.h"
+#import "RecognitionViewController.h"
+#import "ImageUtils.h"
+#import "ZOImportActionSheet.h"
 
 
 @interface MAImagePickerController ()
+{
+	UIToolbar* _toolbar;
+}
 - (void)image:(UIImage *)image didFinishSavingWithError:(NSError *)error contextInfo:(void *)contextInfo;
 @end
 
@@ -33,16 +40,53 @@
 -(void)viewWillAppear:(BOOL)animated
 {
 	[super viewWillAppear:animated];
-	[self.navigationController setNavigationBarHidden:YES];
+	[self.navigationController setNavigationBarHidden:NO];
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction
+	  target:self action:@selector(actionButtonPressed:)];
+	[self.navigationController.view addSubview:_toolbar];
+	self.navigationController.navigationBar.translucent = NO;
 
+
+
+}
+- (IBAction)actionButtonPressed:(id)sender
+{
+	ZOImportActionSheet* actionSheet = [[ZOImportActionSheet alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height)];
+    [actionSheet showInView:self.view];
+}
+
+
+-(void) viewWillDisappear:(BOOL)animated
+{
+	[super viewWillDisappear:animated];
+	[_toolbar removeFromSuperview];
+	
+	if (_sourceType == MAImagePickerControllerSourceTypeCamera && [UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera])
+    {
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:@"AVSystemController_SystemVolumeDidChangeNotification" object:nil];
+        
+        [[_captureManager captureSession] stopRunning];
+    }
+}
+
+- (void)cancelPressed:(id)sender
+{
+	[self dismissViewControllerAnimated:nil completion:nil]; 
 }
 
 - (void)viewDidLoad
 {
-    [self.navigationController setNavigationBarHidden:YES];
-    [self.view setBackgroundColor:[UIColor blackColor]];
-    
-
+	
+    // self.edgesForExtendedLayout = UIRectEdgeNone;
+    [self.view setBackgroundColor:[UIColor whiteColor]];
+	self.title = NSLocalizedString(@"capture", nil);
+	
+	
+	UIBarButtonItem *rightButton = [[UIBarButtonItem alloc] initWithTitle:@"Cancel"
+																	style:UIBarButtonItemStyleDone target:self action:@selector(cancelPressed:)];
+	self.navigationItem.leftBarButtonItem = rightButton;
+	
+	
     
     if (_sourceType == MAImagePickerControllerSourceTypeCamera && [UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera])
     {
@@ -72,7 +116,7 @@
         [_captureManager addStillImageOutput];
         [_captureManager addVideoPreviewLayer];
         
-        CGRect layerRect = CGRectMake(0, 0, self.view.bounds.size.width, self.view.bounds.size.height);
+        CGRect layerRect = CGRectMake(0, -65, self.view.bounds.size.width, self.view.bounds.size.height);
         [[_captureManager previewLayer] setBounds:layerRect];
         [[_captureManager previewLayer] setPosition:CGPointMake(CGRectGetMidX(layerRect),CGRectGetMidY(layerRect))];
         [[[self view] layer] addSublayer:[[self captureManager] previewLayer]];
@@ -94,60 +138,38 @@
         UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(dismissMAImagePickerController)];
         [swipeDown setDirection:UISwipeGestureRecognizerDirectionDown];
         [self.view addGestureRecognizer:swipeDown];
+       // [[self view] addSubview:gridCameraView];
         
-        [[self view] addSubview:gridCameraView];
-        
-        _cameraToolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - kCameraToolBarHeight, self.view.bounds.size.width, kCameraToolBarHeight)];
-        //[_cameraToolbar setBackgroundImage:[UIImage imageNamed:@"camera-bottom-bar"] forToolbarPosition:UIToolbarPositionAny barMetrics:UIBarMetricsDefault];
-        
-        UIBarButtonItem *cancelButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"close-button"] style:UIBarButtonItemStylePlain target:self action:@selector(dismissMAImagePickerController)];
-        cancelButton.accessibilityLabel = @"Close Camera Viewer";
-        
-        UIImage *cameraButtonImage = [UIImage imageNamed:@"camera-button"];
-        UIImage *cameraButtonImagePressed = [UIImage imageNamed:@"camera-button-pressed"];
-        UIButton *pictureButtonRaw = [UIButton buttonWithType:UIButtonTypeCustom];
-        [pictureButtonRaw setImage:cameraButtonImage forState:UIControlStateNormal];
-        [pictureButtonRaw setImage:cameraButtonImagePressed forState:UIControlStateHighlighted];
-        [pictureButtonRaw addTarget:self action:@selector(pictureMAIMagePickerController) forControlEvents:UIControlEventTouchUpInside];
-        pictureButtonRaw.frame = CGRectMake(0.0, 0.0, cameraButtonImage.size.width, cameraButtonImage.size.height);
-        _pictureButton = [[UIBarButtonItem alloc] initWithCustomView:pictureButtonRaw];
-        _pictureButton.accessibilityLabel = @"Take Picture";
-        
-        if ([[NSUserDefaults standardUserDefaults] objectForKey:kCameraFlashDefaultsKey] == nil)
-        {
-            [self storeFlashSettingWithBool:YES];
-        }
-        
-        if ([[NSUserDefaults standardUserDefaults] boolForKey:kCameraFlashDefaultsKey])
-        {
-            _flashButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"flash-on-button"] style:UIBarButtonItemStylePlain target:self action:@selector(toggleFlash)];
-            _flashButton.accessibilityLabel = @"Disable Camera Flash";
-            flashIsOn = YES;
-            [_captureManager setFlashOn:YES];
-        }
-        else
-        {
-            _flashButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"flash-off-button"] style:UIBarButtonItemStylePlain target:self action:@selector(toggleFlash)];
-            _flashButton.accessibilityLabel = @"Enable Camera Flash";
-            flashIsOn = NO;
-            [_captureManager setFlashOn:NO];
-        }
-        
-        UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-        UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace target:nil action:nil];
-        [fixedSpace setWidth:10.0f];
-        
-        [_cameraToolbar setItems:[NSArray arrayWithObjects:fixedSpace,cancelButton,flexibleSpace,_pictureButton,flexibleSpace,_flashButton,fixedSpace, nil]];
-        
-        [self.view addSubview:_cameraToolbar];
-        
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(transitionToMAImagePickerControllerAdjustViewController) name:kImageCapturedSuccessfully object:nil];
-        
-        _cameraPictureTakenFlash = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, self.view.bounds.size.height -kCameraToolBarHeight)];
-        [_cameraPictureTakenFlash setBackgroundColor:[UIColor colorWithRed:0.99f green:0.99f blue:1.00f alpha:1.00f]];
-        [_cameraPictureTakenFlash setUserInteractionEnabled:NO];
-        [_cameraPictureTakenFlash setAlpha:0.0f];
-        [self.view addSubview:_cameraPictureTakenFlash];
+				
+		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(transitionToRecognitionViewController) name:kImageCapturedSuccessfully object:nil];
+		
+		/*
+		_toolbar = [[UIToolbar alloc] init];
+		_toolbar.barStyle = UIBarStyleDefault;
+		[_toolbar sizeToFit];
+		_toolbar.frame = CGRectMake(0, self.view.frame.size.height-70, 320, 70);
+		UIBarButtonItem *spaceItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace target:nil action:nil];
+		spaceItem.width = 130.0;
+		UIBarButtonItem *cameraItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCamera target:self action:@selector(pictureMAIMagePickerController)];
+		NSArray *items = [NSArray arrayWithObjects: spaceItem, cameraItem, nil];
+		[_toolbar setItems:items];
+		[self.navigationController.view addSubview:_toolbar];
+		*/
+		
+		
+		UIButton *button = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+		CGRect frame = CGRectMake(40, self.view.frame.size.height-120, 240, 44);
+		button.frame = frame;
+		[button setBackgroundColor:[UIColor darkBlue]];
+		button.titleLabel.font = [UIFont systemFontOfSize:18];
+		[button setTitle: NSLocalizedString(@"capture", @"") forState:UIControlStateNormal];
+		[button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+		button.layer.cornerRadius = 10;
+		button.clipsToBounds = YES;
+		[button addTarget:self action:@selector(pictureMAIMagePickerController) forControlEvents:UIControlEventTouchUpInside];
+		[self.view addSubview:button];
+		
+
     }
     else
     {
@@ -185,15 +207,6 @@
     }
 }
 
-- (void)viewWillDisappear:(BOOL)animated
-{
-    if (_sourceType == MAImagePickerControllerSourceTypeCamera && [UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera])
-    {
-        [[NSNotificationCenter defaultCenter] removeObserver:self name:@"AVSystemController_SystemVolumeDidChangeNotification" object:nil];
-        
-        [[_captureManager captureSession] stopRunning];
-    }
-}
 
 - (void)pictureMAIMagePickerController
 {
@@ -230,6 +243,28 @@
     [[NSUserDefaults standardUserDefaults] setBool:flashSetting forKey:kCameraFlashDefaultsKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
+
+- (void)transitionToRecognitionViewController
+{
+	[[_captureManager captureSession] stopRunning];
+    
+    int const maxImagePixelsAmount = 6200000; // 3.2 MP
+	// UIImage* newImage =scaleAndRotateImage(_adjustedImage, maxImagePixelsAmount);
+	
+	UIImage* newImage =scaleAndRotateImage([[self captureManager] stillImage], maxImagePixelsAmount);
+	
+	
+	
+	CRecognitionViewController* recognitionController = [CRecognitionViewController sharedManager];
+	[[self navigationController] pushViewController:recognitionController animated:YES];
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+		[recognitionController recognizeImage:newImage];
+	});
+	
+	[[self navigationController] setNavigationBarHidden:NO animated:NO];
+}
+
+
 
 - (void)transitionToMAImagePickerControllerAdjustViewController
 {
@@ -346,5 +381,4 @@
 {
     return NO;
 }
-
 @end
